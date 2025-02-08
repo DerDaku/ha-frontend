@@ -155,11 +155,33 @@ export class HaChartBase extends LitElement {
           "chart-container": true,
           "has-legend": !!this.options?.legend,
         })}
-        style=${styleMap({
-          height: this.height ?? `${this._getDefaultHeight()}px`,
-        })}
         @wheel=${this._handleWheel}
       >
+        ${this.options?.legend
+          ? html`<div class="chart-legend">
+              <ul>
+                ${this.data?.map(
+                  (dataset) =>
+                    html`<li
+                      @click=${this._toggleLine}
+                      .title=${dataset.name}
+                      class=${classMap({
+                        hidden: dataset.hidden,
+                      })}
+                    >
+                      <div
+                        class="bullet"
+                        style=${styleMap({
+                          backgroundColor: dataset.color as string,
+                          borderColor: dataset.color as string,
+                        })}
+                      ></div>
+                      <div class="label">${dataset.name}</div>
+                    </li>`
+                )}
+              </ul>
+            </div>`
+          : ""}
         <div class="chart"></div>
         ${this._isZoomed
           ? html`<ha-icon-button
@@ -197,14 +219,17 @@ export class HaChartBase extends LitElement {
 
       this.chart = echarts.init(container, "custom");
       this.chart.on("legendselectchanged", (params: any) => {
+        const isSelected = params.selected[params.name];
         if (this.externalHidden) {
-          const isSelected = params.selected[params.name];
           if (isSelected) {
             fireEvent(this, "dataset-unhidden", { name: params.name });
           } else {
             fireEvent(this, "dataset-hidden", { name: params.name });
           }
         }
+        if (!this.data) return;
+        this.data.find((el) => el.name === params.name).hidden = !isSelected;
+        this.requestUpdate("data");
       });
       this.chart.on("datazoom", (e: any) => {
         const { start, end } = e.batch?.[0] ?? e;
@@ -302,6 +327,9 @@ export class HaChartBase extends LitElement {
       ...this.options,
       xAxis,
     };
+
+    if (options.legend) options.legend.show = false;
+    if (options.grid) options.grid.top = 30;
 
     const isMobile = window.matchMedia(
       "all and (max-width: 450px), all and (max-height: 500px)"
@@ -508,8 +536,11 @@ export class HaChartBase extends LitElement {
     };
   }
 
-  private _getDefaultHeight() {
-    return Math.max(this.clientWidth / 2, 200);
+  private _toggleLine(ev) {
+    this.chart?.dispatchAction({
+      type: "legendToggleSelect",
+      name: ev.currentTarget.title,
+    });
   }
 
   private _handleZoomReset() {
@@ -541,11 +572,10 @@ export class HaChartBase extends LitElement {
     }
     .chart-container {
       position: relative;
-      max-height: var(--chart-max-height, 350px);
     }
     .chart {
       width: 100%;
-      height: 100%;
+      height: 200px;
     }
     .zoom-reset {
       position: absolute;
@@ -558,7 +588,49 @@ export class HaChartBase extends LitElement {
       border: 1px solid var(--divider-color);
     }
     .has-legend .zoom-reset {
-      top: 64px;
+      top: unset;
+      bottom: 135px;
+    }
+
+    .chart-legend {
+      text-align: center;
+    }
+    .chart-legend li {
+      cursor: pointer;
+      display: inline-grid;
+      grid-auto-flow: column;
+      padding: 0 8px;
+      box-sizing: border-box;
+      align-items: center;
+      color: var(--secondary-text-color);
+    }
+    .chart-legend .hidden {
+      text-decoration: line-through;
+    }
+    .chart-legend .label {
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      overflow: hidden;
+    }
+
+    .chart-legend .bullet {
+      border-width: 1px;
+      border-style: solid;
+      border-radius: 50%;
+      display: inline-block;
+      height: 16px;
+      margin-right: 6px;
+      width: 16px;
+      flex-shrink: 0;
+      box-sizing: border-box;
+      margin-inline-end: 6px;
+      margin-inline-start: initial;
+      direction: var(--direction);
+    }
+    .chart-legend ul {
+      display: inline-block;
+      padding: 0 0px;
+      margin: 8px 0 0 0;
     }
   `;
 }
